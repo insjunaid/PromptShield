@@ -46,6 +46,7 @@ is inspected before the model sees it, and every tool call is checked before it 
 **Without PromptShield**, the agent can't tell the article apart from the instructions hidden in it:
 
 ```mermaid
+%%{init: {"themeVariables": {"fontFamily": "Verdana, Geneva, sans-serif"}} }%%
 sequenceDiagram
     autonumber
     actor U as You
@@ -59,18 +60,19 @@ sequenceDiagram
     A->>T: read_file("secrets.txt")
     T-->>A: API keys, passwords
     A->>X: http_post(secrets)
-    Note over X: 💥 Secrets stolen
+    Note over X: Secrets stolen
 ```
 
 **With PromptShield**, the attack is caught on the way in, and a second, independent line stops it
 on the way out:
 
 ```mermaid
+%%{init: {"themeVariables": {"fontFamily": "Verdana, Geneva, sans-serif"}} }%%
 sequenceDiagram
     autonumber
     actor U as You
     participant A as AI agent
-    participant P as 🛡️ PromptShield
+    participant P as PromptShield
     participant T as Tools
     U->>A: Summarize this article
     A->>P: web_fetch(article)
@@ -78,7 +80,7 @@ sequenceDiagram
     T-->>P: Article + invisible text
     Note over P: Inbound scan:<br/>white-on-white text found,<br/>instruction aimed at an AI
     P-->>A: Article only, marked as untrusted data
-    A-->>U: ✅ Summary
+    A-->>U: Summary, no leak
     Note over P: Outbound guard, if the agent still tried:<br/>http_post(secret) to an unknown host<br/>= blocked (canary + taint)
 ```
 
@@ -130,27 +132,28 @@ not from what the agent said.
 ## 🧠 How it works
 
 ```mermaid
+%%{init: {"htmlLabels": false, "flowchart": {"htmlLabels": false, "padding": 20}, "themeVariables": {"fontFamily": "Verdana, Geneva, sans-serif"}} }%%
 flowchart TB
-    agent(["🤖 AI agent: Claude Desktop, Cursor, or your own"])
+    agent["AI agent<br/>Claude Desktop, Cursor<br/>or your own"]
 
-    subgraph PS["🛡️ PromptShield gateway, on 127.0.0.1"]
+    subgraph PS["PromptShield gateway on 127.0.0.1"]
         direction TB
         subgraph IN["Every tool result"]
             direction LR
-            L0["L0 Normalize<br/>see what the AI sees"] --> L2["L2 Hidden-content<br/>rules"] --> L1["L1 Prompt Guard 2<br/>classifier"] --> CAN["Canary check"] --> L3["L3 LLM judge<br/>only when unsure"]
+            L0["L0 Normalize<br/>what the AI sees"] --> L2["L2 Hidden<br/>content rules"] --> L1["L1 Prompt<br/>Guard 2"] --> CAN["Canary<br/>check"] --> L3["L3 LLM judge<br/>when unsure"]
         end
-        POL{"Policy engine<br/>allow · sanitize<br/>block · ask you"}
+        POL{"Policy<br/>engine"}
         subgraph OUT["Every tool call"]
             direction LR
-            L4["L4 Action guard<br/>egress, taint,<br/>DLP, canaries"]
-            REG["Registry guard<br/>poisoned tools,<br/>rug pulls"]
+            L4["L4 Action guard<br/>egress, taint<br/>DLP, canaries"]
+            REG["Registry guard<br/>poisoned tools<br/>rug pulls"]
         end
         IN --> POL
         OUT --> POL
     end
 
-    tools[("🧰 MCP tool servers: web, files, mail, http")]
-    dash["📊 Live dashboard: threat feed, replay, approvals"]
+    tools["MCP tool servers<br/>web, files<br/>mail, http"]
+    dash["Live dashboard<br/>threats, replay<br/>approvals"]
     agent <-->|MCP| PS
     PS <-->|MCP| tools
     POL -.->|events| dash
@@ -170,13 +173,14 @@ plants fake secrets (canaries) and fingerprints private data as the agent reads 
 past every detector and the agent tries to send that data somewhere new, the call is stopped anyway:
 
 ```mermaid
+%%{init: {"htmlLabels": false, "flowchart": {"htmlLabels": false, "padding": 20}, "themeVariables": {"fontFamily": "Verdana, Geneva, sans-serif"}} }%%
 flowchart TD
-    A["Hidden instruction arrives in a tool result"] --> B{"Caught by L0, L2, L1 or L3?"}
-    B -->|yes| C["✅ Removed or blocked<br/>before the agent reads it"]
-    B -->|missed| D["Agent tries to act on it"]
-    D --> E{"L4: private data or a canary<br/>going to an unknown destination?"}
-    E -->|yes| F["✅ Blocked, or held for your approval"]
-    E -->|no| G["Call runs: nothing sensitive leaves"]
+    A["Hidden instruction<br/>arrives in a tool result"] --> B{"Caught by<br/>a detector?"}
+    B -->|yes| C["Removed or blocked<br/>before the agent<br/>reads it"]
+    B -->|missed| D["Agent tries<br/>to act on it"]
+    D --> E{"Private data<br/>or a canary going<br/>somewhere new?"}
+    E -->|yes| F["L4 blocks it<br/>or asks you"]
+    E -->|no| G["Call runs<br/>nothing sensitive<br/>leaves"]
 
     classDef ok fill:#e7f6ec,stroke:#166534,color:#0a2e17
     classDef risk fill:#fdecea,stroke:#b91c1c,color:#3b0a0a
