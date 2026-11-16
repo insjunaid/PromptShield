@@ -1,0 +1,67 @@
+version: 1
+mode: enforce            # enforce | monitor (monitor = log verdicts but always ALLOW)
+fail_mode:
+  content_scan: closed   # closed = BLOCK on layer error, open = ALLOW + warning
+  action_guard: closed
+
+thresholds:
+  sanitize: 0.35
+  block: 0.75
+  judge_band: [0.30, 0.80]
+  judge_benign_discount: 1.0   # 1.0 = a benign answer changes nothing: it missed 5 of 12 paraphrases (D049)
+
+weights:                 # multiply finding score before noisy-OR
+  L1: 1.0
+  L2: 0.8
+  L3: 0.9
+  L0: 0.3
+  CANARY: 1.0
+  L4: 1.0
+  REGISTRY: 1.0
+  hidden_origin_boost: 1.3   # L1 hit on a hidden segment; each term is clamped to 1.0
+
+force:                   # minimum decisions: the math can still make the result stricter
+  CANARY.tripped: BLOCK
+  REGISTRY.rug_pull: BLOCK
+  L2.UNICODE.tag_smuggling: BLOCK
+  L2.MARKDOWN.exfil_link: SANITIZE
+
+default_tool_class: egress   # any tool not listed below
+
+tools:                       # keyed by server.tool, so a shadowing tool can't inherit a class
+  web.web_fetch:       { class: read, egress_if: has_query, arg_destination: url }
+  web.fetch_image:     { class: read }
+  web.read_image_text: { class: read }
+  mail.list_emails:    { class: read }
+  mail.read_email:     { class: read,  sensitive_output: true }
+  files.read_file:     { class: read,  sensitive_output: true }
+  files.list_files:    { class: read }
+  mail.send_email:     { class: egress, arg_destination: to }
+  http.http_post:      { class: egress, arg_destination: url }
+  files.write_file:    { class: write }
+  files.delete_file:   { class: write, require_approval: true }
+  # The lab's weather tool, trusted as a user who installed it would. Its tricks (A10, A11) are
+  # the registry guard's job, not the policy's.
+  evil.get_weather:    { class: read }
+
+egress:
+  allow_hosts: ["localhost:8081", "company.example"]   # host:port; a bare "localhost" is invalid
+  deny_hosts: ["localhost:8000", "localhost:8765"]     # all local spellings count as localhost
+  allow_recipients: ["*@company.example"]
+  unknown_destination: REQUIRE_APPROVAL
+  after_high_finding: REQUIRE_APPROVAL
+  sensitive_data_to_unknown: BLOCK
+  max_egress_per_session: 5
+  max_identical_calls: 3
+
+approvals:
+  timeout_seconds: 120
+  on_timeout: BLOCK
+
+# A visible L1 hit with nothing else strong beside it is capped here, not blocked. An article that
+# quotes an attack looks just like the attack to a classifier (D047). null turns this off.
+lone_visible_classifier: SANITIZE
+
+sanitize:
+  datamarking: true
+  marker: "^"

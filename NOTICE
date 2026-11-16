@@ -1,0 +1,16 @@
+PromptShield
+Copyright (c) 2026 Junaid. Licensed under the MIT License (see LICENSE).
+
+Built with Llama.
+
+PromptShield uses Llama Prompt Guard 2 (meta-llama/Llama-Prompt-Guard-2-86M and
+meta-llama/Llama-Prompt-Guard-2-22M) as its injection classifier. These models are downloaded by the
+user from Hugging Face after accepting Meta's license; no model weights are included in this
+repository.
+
+Llama 4 is licensed under the Llama 4 Community License, Copyright (c) Meta Platforms, Inc. All Rights
+Reserved.
+
+Other third-party components:
+- protectai/deberta-v3-base-prompt-injection-v2 (fallback classifier), Apache License 2.0.
+- deepset/prompt-injections (evaluation dataset), Apache License 2.0.

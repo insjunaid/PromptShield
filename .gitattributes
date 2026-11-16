@@ -1,0 +1,5 @@
+* text=auto
+
+# Bash scripts break with CRLF line endings.
+*.sh text eol=lf
+Makefile text eol=lf

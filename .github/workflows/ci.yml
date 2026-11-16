@@ -1,0 +1,65 @@
+# Lint, type-check and fast tests (no model downloads, no Ollama, no secrets), plus the dashboard's
+# tests and build. Slow and e2e tests need local models and Ollama, so they run on a dev machine.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      HF_HUB_OFFLINE: "1"  # fast tests must never download a model
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install
+        run: uv sync --frozen --group eval
+      - name: Lint
+        run: uv run --frozen ruff check . --output-format github
+      - name: Format
+        run: uv run --frozen ruff format --check .
+      - name: Types
+        run: uv run --frozen mypy promptshield eval lab
+      - name: Fast tests
+        run: uv run --frozen pytest -q -m "not slow and not e2e"
+
+  dashboard:
+    name: Dashboard
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.16.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: dashboard/pnpm-lock.yaml
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Tests
+        run: pnpm test
+      - name: Type-check and build
+        run: pnpm build
