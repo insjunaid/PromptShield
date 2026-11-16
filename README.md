@@ -21,7 +21,11 @@ text in an article and posts `secrets.txt` to the attacker. **Right, PromptShiel
 instruction is removed before the agent reads the page, nothing leaks, and the summary still gets
 written. The secrets are fake canaries, shown redacted.</sub>
 
-**[▶ Watch the 1-minute demo video](docs/demo.mp4)** · [Results](#-results) · [How it works](#-how-it-works) · [Quickstart](#-quickstart)
+
+
+https://github.com/user-attachments/assets/5372e5e5-e7a6-4c36-b224-bd6b2462edae
+
+ · [Results](#-results) · [How it works](#-how-it-works) · [Quickstart](#-quickstart)
 
 </div>
 
