@@ -11,6 +11,7 @@ and split again if the cheap estimate was wrong. Padding must never become a byp
 import asyncio
 import json
 import re
+import threading
 import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -156,18 +157,23 @@ class ClassifierLayer:
         self._settings = settings
         self._classifier = classifier
         self._second = second
+        self._load_lock = threading.Lock()
         self.refits = 0  # windows the estimate got wrong, for measuring the estimate
 
     def _model(self) -> Classifier:
-        if self._classifier is None:
-            self._classifier = _load(self._settings)
-        return self._classifier
+        # Warm-up runs in the background, so a first scan can arrive while it loads; the lock
+        # keeps the model from being loaded twice (about 740 MB each time).
+        with self._load_lock:
+            if self._classifier is None:
+                self._classifier = _load(self._settings)
+            return self._classifier
 
     def _second_model(self) -> Classifier | None:
         """Only when switched on. A missing export then fails closed, like a missing primary."""
-        if self._second is None and self._settings.classifier_second_opinion:
-            self._second = _load_second(self._settings)
-        return self._second
+        with self._load_lock:
+            if self._second is None and self._settings.classifier_second_opinion:
+                self._second = _load_second(self._settings)
+            return self._second
 
     async def warmup(self) -> None:
         """Load the models and run them once, so the first real scan isn't the slow one."""

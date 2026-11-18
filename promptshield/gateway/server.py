@@ -22,12 +22,11 @@ from starlette.types import Receive, Scope, Send
 
 from promptshield.config import UpstreamServer
 from promptshield.gateway.core import Gateway, Upstream
+from promptshield.gateway.protocol import SERVER_NAME, TASK_HEADER
 from promptshield.models import new_id
 
 logger = structlog.get_logger(__name__)
 
-SERVER_NAME = "promptshield-gateway"
-TASK_HEADER = "x-promptshield-task"
 TASK_META_KEY = "promptshield/user_task"
 MAX_TASK_CHARS = 2000
 LOCAL_HOSTS = ["127.0.0.1:*", "localhost:*"]

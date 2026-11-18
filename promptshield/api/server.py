@@ -1,5 +1,6 @@
 """The FastAPI app. Run it with `uv run python -m promptshield.api.server`."""
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -164,7 +165,10 @@ def create_app(settings: Settings | None = None, registry: LayerRegistry | None 
         configure_logging(active_settings.log_format)
         state = build_state(active_settings, active_registry, canaries, redactor)
         app.state.shield = state
-        await state.pipeline.warmup()
+        # Warm up in the background: loading the classifier and asking Ollama to load the judge can
+        # take a minute, and MCP apps give up on a server that isn't answering by then. A scan that
+        # arrives first loads what it needs itself (the classifier load is locked).
+        warming = asyncio.create_task(state.pipeline.warmup())
         async with connect_upstreams(active_settings.gateway_upstreams) as upstreams:
             gateway = Gateway(
                 gateway_services(state),
@@ -179,6 +183,7 @@ def create_app(settings: Settings | None = None, registry: LayerRegistry | None 
                     yield
                 finally:
                     mounted.attach(None)
+        warming.cancel()
         state.database.close()
 
     app = FastAPI(title="PromptShield", version="0.1.0", lifespan=lifespan)

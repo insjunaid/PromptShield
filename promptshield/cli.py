@@ -14,9 +14,9 @@ prints the entry, and you paste it.
 import argparse
 import json
 import os
+import socket
 import subprocess
 import sys
-import time
 from collections.abc import Sequence
 
 import httpx
@@ -31,7 +31,6 @@ from promptshield.config import (
 )
 
 PACKAGE = "promptshield-mcp"
-START_TIMEOUT_SECONDS = 120.0
 ENV_TEMPLATE = """\
 # PromptShield settings. Every name is optional; defaults are in promptshield/config.py.
 # A free Hugging Face token lets `promptshield setup --prompt-guard` use Prompt Guard 2.
@@ -143,7 +142,17 @@ def api_url(settings: Settings) -> str:
     return f"http://{settings.host}:{settings.api_port}"
 
 
+def port_open(settings: Settings, timeout: float = 0.3) -> bool:
+    """A quick look first: on Windows a refused local connection takes about 2 s to report, which
+    the bridge can't afford before it answers the app."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(timeout)
+        return probe.connect_ex((settings.host, settings.api_port)) == 0
+
+
 def is_running(settings: Settings) -> bool:
+    if not port_open(settings):
+        return False
     try:
         response = httpx.get(f"{api_url(settings)}/health", timeout=2, trust_env=False)
         return response.status_code == 200
@@ -185,15 +194,6 @@ def start_in_background(settings: Settings) -> None:
             stderr=log,
             start_new_session=True,
         )
-
-
-def wait_until_running(settings: Settings, timeout: float = START_TIMEOUT_SECONDS) -> bool:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if is_running(settings):
-            return True
-        time.sleep(0.5)
-    return False
 
 
 def cmd_start(args: argparse.Namespace) -> None:
@@ -238,8 +238,8 @@ def cmd_bridge(args: argparse.Namespace) -> None:
             "run `promptshield start` to share one with several apps)..."
         )
         start_in_background(settings)
-        if not wait_until_running(settings):
-            raise SystemExit(f"PromptShield didn't start. See {settings.db_path.parent / 'logs'}")
+    # No waiting here: the bridge answers the app at once and connects when the shield is up,
+    # because apps give up on an MCP server that's slow to answer.
     asyncio.run(stdio_bridge.run(f"{api_url(settings)}/mcp/", args.task))
 
 

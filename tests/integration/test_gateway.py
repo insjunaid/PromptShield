@@ -24,7 +24,7 @@ from promptshield.config import Settings, UpstreamServer
 from promptshield.events import EventBus
 from promptshield.gateway.core import CHECK_FAILED, UPSTREAM_FAILED, Gateway, GatewayServices
 from promptshield.gateway.server import TASK_META_KEY, build_server
-from promptshield.gateway.stdio_bridge import bridge_server
+from promptshield.gateway.stdio_bridge import Upstream, bridge_server
 from promptshield.layers.base import ScanContext
 from promptshield.layers.canary import CanaryStore
 from promptshield.layers.l0_normalize import NormalizeLayer
@@ -429,12 +429,24 @@ async def test_the_api_serves_the_gateway_over_http(tmp_path: Path) -> None:
         stored.close()
 
 
+async def test_the_bridge_answers_at_once_and_reports_a_shield_that_never_came_up() -> None:
+    """Apps give up on a slow MCP server, so the bridge mustn't wait for the shield to start."""
+    upstream = Upstream(wait_seconds=0.1)  # never connected
+    async with create_connected_server_and_client_session(bridge_server(upstream)) as client:
+        assert (await client.list_tools()).tools == []
+        result = await client.call_tool("read_file", {"path": "x"})
+    assert result.isError and "isn't running yet" in result_text(result)
+
+
 async def test_the_stdio_bridge_forwards_to_the_gateway(database: Database) -> None:
     """Clients that only speak stdio go through the bridge, and the gateway still checks."""
     tools = upstreams()
     gateway_server = build_server(gateway(database, tools))
     async with create_connected_server_and_client_session(gateway_server) as to_gateway:
-        async with create_connected_server_and_client_session(bridge_server(to_gateway)) as client:
+        upstream = Upstream()
+        upstream.session = to_gateway
+        upstream.ready.set()
+        async with create_connected_server_and_client_session(bridge_server(upstream)) as client:
             assert "read_file" in {tool.name for tool in (await client.list_tools()).tools}
             ok = await client.call_tool("list_files", {})
             blocked = await client.call_tool(
