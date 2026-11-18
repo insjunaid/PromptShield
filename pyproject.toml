@@ -144,5 +144,10 @@ python_version = "3.12"
 explicit_package_bases = true
 exclude = ["graft/", "dashboard/", "lab/runs/"]
 
+# Only in the `prompt-guard` extra / `export` group, so CI (and most installs) don't have it.
+[[tool.mypy.overrides]]
+module = ["optimum.*"]
+ignore_missing_imports = true
+
 [tool.uv.sources]
 en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
