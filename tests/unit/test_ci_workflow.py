@@ -34,6 +34,49 @@ def test_ci_is_read_only_and_needs_no_secrets() -> None:
     assert "secrets." not in text and "HF_TOKEN" not in text
 
 
+PUBLISH: dict[Any, Any] = yaml.safe_load(
+    (ROOT / ".github" / "workflows" / "publish.yml").read_text("utf-8")
+)
+
+
+def test_publishing_runs_on_a_release_with_trusted_publishing_only() -> None:
+    text = (ROOT / ".github" / "workflows" / "publish.yml").read_text("utf-8")
+    triggers = PUBLISH[True]  # YAML reads the key `on` as True
+    assert triggers["release"]["types"] == ["published"]
+    assert PUBLISH["permissions"] == {"contents": "read"}
+    job = PUBLISH["jobs"]["publish"]
+    assert job["permissions"] == {"id-token": "write"}
+    assert job["environment"]["name"] == "pypi" and job["if"] == "github.event_name == 'release'"
+    assert any("pypa/gh-action-pypi-publish" in step.get("uses", "") for step in job["steps"])
+    assert "${{ secrets." not in text  # no stored token or password is used
+    for each in PUBLISH["jobs"].values():
+        for step in each["steps"]:
+            assert "password" not in step.get("with", {})
+
+
+def test_the_package_is_built_with_its_dashboard_and_checked_before_publishing() -> None:
+    runs = [step.get("run", "") for step in PUBLISH["jobs"]["build"]["steps"]]
+    order = [
+        next(i for i, run in enumerate(runs) if needle in run)
+        for needle in (
+            "build_dashboard.py",
+            "uv build",
+            "twine check --strict",
+            "dashboard_built()",
+        )
+    ]
+    assert order == sorted(order)
+
+
+def test_the_plugin_and_the_package_share_one_version() -> None:
+    import json
+    import tomllib
+
+    version = tomllib.loads((ROOT / "pyproject.toml").read_text("utf-8"))["project"]["version"]
+    plugin = json.loads((ROOT / "plugin" / ".claude-plugin" / "plugin.json").read_text("utf-8"))
+    assert plugin["version"] == version
+
+
 def test_the_python_version_matches_the_project() -> None:
     steps = WORKFLOW["jobs"]["python"]["steps"]
     uv = next(step for step in steps if step.get("uses", "").startswith("astral-sh/setup-uv"))

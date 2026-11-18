@@ -2,7 +2,7 @@
 name = "promptshield-mcp"
 version = "0.1.0"
 description = "A real-time firewall for AI agents: an MCP gateway that stops prompt injection and data theft"
-readme = "README.md"
+dynamic = ["readme"]   # README.md, with links made absolute for PyPI (see fancy-pypi-readme below)
 license = "MIT"
 license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Junaid" }]
@@ -58,8 +58,32 @@ Repository = "https://github.com/insjunaid/PromptShield"
 Issues = "https://github.com/insjunaid/PromptShield/issues"
 
 [build-system]
-requires = ["hatchling>=1.27"]
+requires = ["hatchling>=1.27", "hatch-fancy-pypi-readme>=24.1"]
 build-backend = "hatchling.build"
+
+# PyPI shows the README without the repository around it: relative images and links would break,
+# and Mermaid diagrams don't render. Rewrite them at build time; README.md itself stays as is.
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "README.md"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '(?s)```mermaid\n.*?```'
+replacement = '*This diagram is drawn on [GitHub](https://github.com/insjunaid/PromptShield#readme).*'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '(!\[[^\]]*\]\()(?!https?://)([^)]+\))'
+replacement = '\1https://raw.githubusercontent.com/insjunaid/PromptShield/main/\2'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = 'src="(?!https?://)([^"]+)"'
+replacement = 'src="https://raw.githubusercontent.com/insjunaid/PromptShield/main/\1"'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '(\]\()(?!https?://|#)([^)]+\))'
+replacement = '\1https://github.com/insjunaid/PromptShield/blob/main/\2'
 
 [tool.hatch.build.targets.wheel]
 packages = ["promptshield"]

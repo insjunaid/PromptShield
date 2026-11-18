@@ -1,0 +1,71 @@
+# Publishes promptshield-mcp to PyPI when a GitHub release is published (tag vX.Y.Z = the version in
+# pyproject.toml). Uses PyPI trusted publishing: GitHub proves who it is to PyPI, so no password or
+# API token is stored anywhere. Run it by hand to build and check without publishing.
+name: Publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.16.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: dashboard/pnpm-lock.yaml
+      - name: The release tag matches the package version
+        if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version="$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)"
+          test "v${version}" = "${TAG}" || { echo "tag ${TAG} != version ${version}"; exit 1; }
+      - name: Build the dashboard into the package
+        run: python3 scripts/build_dashboard.py
+      - name: Build
+        run: uv build
+      - name: Check the package as PyPI will
+        run: uvx twine check --strict dist/*
+      - name: Smoke-test the wheel in a clean environment
+        run: |
+          uv venv /tmp/smoke --python 3.12
+          uv pip install --python /tmp/smoke dist/*.whl
+          /tmp/smoke/bin/promptshield --help
+          /tmp/smoke/bin/promptshield config cursor
+          /tmp/smoke/bin/python -c "from promptshield.api.web import dashboard_built; assert dashboard_built()"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/promptshield-mcp
+    permissions:
+      id-token: write   # trusted publishing; nothing else
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

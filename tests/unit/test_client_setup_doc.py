@@ -1,45 +1,63 @@
-"""The README's client setup section must match the code, so it breaks a test instead of going
-stale."""
+"""The README's install section must match the code, so it breaks a test instead of going stale."""
 
-import importlib.util
 import json
 import re
+import shlex
+import tomllib
 
-import pytest
 import yaml
 
-from promptshield.config import REPO_ROOT, Settings
-from promptshield.gateway import stdio_bridge
+from promptshield import cli
+from promptshield.config import REPO_ROOT
 from promptshield.gateway.server import TASK_HEADER
 from promptshield.policy.schema import ToolPolicy
 
 README = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-# The "Use it with your own MCP client" section, up to the next heading.
-GUIDE = README.split("## 🔌 Use it with your own MCP client", 1)[1].split("\n## ", 1)[0]
+# The "Install" section, up to the next top-level heading.
+GUIDE = README.split("## 🚀 Install", 1)[1].split("\n## ", 1)[0]
+PYPROJECT = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
 
 def blocks(language: str) -> list[str]:
     return re.findall(rf"```{language}\n(.*?)```", GUIDE, re.DOTALL)
 
 
-def env_value(name: str) -> str:
-    match = re.search(rf"^{name}=(.+)$", GUIDE, re.MULTILINE)
-    assert match, f"{name} is not shown in the guide"
-    return match.group(1)
+def test_the_json_snippet_is_what_promptshield_config_prints() -> None:
+    [block] = blocks("json")
+    printed = cli.client_snippet("cursor").split("\n", 1)[1]
+    assert json.loads(block) == json.loads(printed)
 
 
-def test_every_json_snippet_parses() -> None:
-    assert blocks("json")
-    for block in blocks("json"):
-        json.loads(block)
+def test_the_codex_snippet_is_what_promptshield_config_prints() -> None:
+    [block] = blocks("toml")
+    assert tomllib.loads(block) == tomllib.loads(cli.client_snippet("codex"))
 
 
-def test_the_upstream_example_loads_into_real_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(
-        "PROMPTSHIELD_GATEWAY_UPSTREAMS", env_value("PROMPTSHIELD_GATEWAY_UPSTREAMS")
-    )
-    [upstream] = Settings(_env_file=None).gateway_upstreams  # type: ignore[call-arg]
-    assert upstream.name == "files"
+def test_every_app_in_the_table_has_a_config_name() -> None:
+    names = re.findall(r"\| `([a-z-]+)` \|$", GUIDE, re.MULTILINE)
+    assert len(names) >= 7 and set(names) <= set(cli.CLIENTS)
+
+
+def test_the_commands_shown_exist() -> None:
+    scripts = PYPROJECT["project"]["scripts"]
+    assert scripts[cli.PACKAGE] == "promptshield.cli:main"  # `uvx promptshield-mcp` runs it
+    for line in blocks("bash"):
+        for command in line.splitlines():
+            parts = shlex.split(command.split("#", 1)[0])
+            if not parts or parts[0] != "uvx":
+                continue
+            args = parts[1:]
+            if args[0] == "--from":
+                assert args[1].split("[")[0] == cli.PACKAGE and args[2] == "promptshield"
+                args = args[3:]
+            else:
+                assert args[0] == cli.PACKAGE
+                args = args[1:]
+            cli.parser().parse_args(args)  # raises SystemExit for an unknown command or flag
+
+
+def test_the_claude_code_line_names_this_marketplace() -> None:
+    assert "/plugin install promptshield --marketplace insjunaid/PromptShield" in GUIDE
 
 
 def test_the_policy_example_is_valid() -> None:
@@ -48,19 +66,10 @@ def test_the_policy_example_is_valid() -> None:
         ToolPolicy.model_validate(entry)
 
 
-def test_the_bridge_command_names_a_real_module() -> None:
-    config = json.loads(blocks("json")[0])
-    args = config["mcpServers"]["promptshield"]["args"]
-    module = args[args.index("-m") + 1]
-    assert importlib.util.find_spec(module) is not None
-    assert module == stdio_bridge.__name__
-
-
-def test_the_bridge_accepts_the_flags_the_guide_mentions() -> None:
+def test_the_bridge_accepts_the_task_flag_the_guide_mentions() -> None:
     assert '"--task"' in GUIDE
-    args = stdio_bridge.parse_args(["--task", "Summarize my inbox"])
+    args = cli.parser().parse_args(["bridge", "--task", "Summarize my inbox"])
     assert args.task == "Summarize my inbox"
-    assert stdio_bridge.parse_args([]).url == "http://127.0.0.1:8000/mcp/"
 
 
 def test_the_url_and_header_match_the_gateway() -> None:
@@ -70,4 +79,12 @@ def test_the_url_and_header_match_the_gateway() -> None:
 
 
 def test_the_guide_says_real_configs_are_not_touched() -> None:
-    assert "never edits your client's configuration" in GUIDE
+    assert "never edits your" in GUIDE and "configuration" in GUIDE
+
+
+def test_the_python_example_uses_the_real_api() -> None:
+    from promptshield.sdk import LocalShield, guard_tools
+
+    [block] = blocks("python")
+    assert "from promptshield.sdk import LocalShield, guard_tools" in block
+    assert callable(guard_tools) and hasattr(LocalShield, "create")

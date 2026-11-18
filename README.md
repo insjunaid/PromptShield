@@ -25,7 +25,7 @@ written. The secrets are fake canaries, shown redacted.</sub>
 
 https://github.com/user-attachments/assets/5372e5e5-e7a6-4c36-b224-bd6b2462edae
 
- · [Results](#-results) · [How it works](#-how-it-works) · [Quickstart](#-quickstart)
+[Install](#-install) · [Results](#-results) · [How it works](#-how-it-works) · [Run the demo](#-run-the-demo-from-source)
 
 </div>
 
@@ -236,10 +236,124 @@ on the bare 4B agent; for those, "stopped by" shows what flagged them. The benig
 post *about* prompt injection, an email that naturally says "ignore the previous", a page with a
 legitimate hidden menu, and Hindi and Arabic pages: all 21 benign runs completed with the shield on.</sub>
 
-## 🚀 Quickstart
+## 🚀 Install
+
+**You need [uv](https://docs.astral.sh/uv/)**, which runs PromptShield without a manual install.
+[Ollama](https://ollama.com/) is optional: it powers the LLM judge; without it the fast layers still run.
+
+```bash
+uvx promptshield-mcp setup      # downloads a classifier (about 740 MB, no token needed), checks Ollama
+uvx promptshield-mcp start      # the shield and its dashboard on http://127.0.0.1:8000
+```
+
+Everything stays on your machine, in `~/.promptshield`.
+
+### Claude Code: one command, fullest protection
+
+```
+/plugin install promptshield --marketplace insjunaid/PromptShield
+```
+
+The plugin puts your MCP tools behind the gateway **and** checks Claude Code's built-in tools (WebFetch,
+Read, Bash, …) with hooks: risky calls are denied or need your OK, and an injected result is flagged to
+Claude before it can act on it.
+
+### Every other MCP app
+
+Add one entry to the app's MCP config. `uvx promptshield-mcp config <app>` prints the exact text.
+
+| App | Config file | `config` name |
+| --- | --- | --- |
+| Cursor | `~/.cursor/mcp.json` | `cursor` |
+| Claude Desktop | Settings → Developer → Edit Config | `claude-desktop` |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | `windsurf` |
+| Google Antigravity | MCP Servers → Manage MCP Servers → View raw config | `antigravity` |
+| Gemini CLI | `~/.gemini/settings.json` | `gemini` |
+| VS Code (Copilot) | `.vscode/mcp.json` (its key is `servers`) | `vscode` |
+| OpenAI Codex | `~/.codex/config.toml` | `codex` |
+
+```json
+{
+  "mcpServers": {
+    "promptshield": {
+      "command": "uvx",
+      "args": ["promptshield-mcp", "bridge"]
+    }
+  }
+}
+```
+
+For Codex (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.promptshield]
+command = "uvx"
+args = ["promptshield-mcp", "bridge"]
+```
+
+The app starts PromptShield when it opens and stops it when it closes. To share one shield between
+several apps, keep `uvx promptshield-mcp start` running instead. Apps that connect by URL use
+`http://127.0.0.1:8000/mcp/` and can send the user's task in an `X-PromptShield-Task` header; with the
+bridge, add `"--task", "Summarize my inbox"` to `args` so the judge can check for deviation.
+
+### Put your MCP servers behind it
+
+PromptShield protects the tools it stands in front of. Move each MCP server from your app's config to
+PromptShield's list, so the app can't reach it directly:
+
+```bash
+uvx promptshield-mcp servers add files -- npx -y @modelcontextprotocol/server-filesystem ~/Documents
+uvx promptshield-mcp servers list
+```
+
+Then mark read-only tools as reads. Tools the policy doesn't know count as egress, so every call waits
+for your approval. Copy [the default policy](promptshield/policy/default.yaml), add your tools, and set
+`PROMPTSHIELD_POLICY_PATH` in `~/.promptshield/.env`:
+
+```yaml
+tools:
+  files.read_text_file: { class: read, sensitive_output: true }   # results count as private data
+  files.list_directory: { class: read }
+```
+
+Approvals appear on the dashboard's **Approvals** page; no answer in 120 s means no.
+`uvx promptshield-mcp doctor` shows what's installed and running. PromptShield never edits your
+client's configuration: it prints the entry, and you paste it.
+
+<details>
+<summary>Use Prompt Guard 2, the classifier the results above were measured with</summary>
+
+The default install uses the ungated ProtectAI classifier, which flags more benign text. For Prompt
+Guard 2, accept the Llama license on [its Hugging Face page](https://huggingface.co/meta-llama/Llama-Prompt-Guard-2-86M),
+put `HF_TOKEN=...` in `~/.promptshield/.env`, then run (about 8 minutes the first time):
+
+```bash
+uvx --from "promptshield-mcp[prompt-guard]" promptshield setup --prompt-guard
+```
+</details>
+
+<details>
+<summary>Python agents (LangChain / LangGraph)</summary>
+
+Guard your agent's tools in the same process, with the same checks as the gateway:
+
+```python
+from promptshield.sdk import LocalShield, guard_tools
+
+shield = LocalShield.create()
+await shield.warmup()
+tools = await guard_tools({"files": file_tools, "web": web_tools}, shield=shield)
+```
+</details>
+
+## 💻 Run the demo from source
+
+The Red-Team Lab and the benchmarks run from a clone of this repository, not from the installed
+package.
 
 **You need:** [uv](https://docs.astral.sh/uv/), Node.js with [pnpm](https://pnpm.io/), and
 [Ollama](https://ollama.com/). The check script tells you what's missing and installs nothing.
+
 
 ```bash
 make check                     # or: powershell -File scripts/check.ps1   |   bash scripts/check.sh
@@ -276,48 +390,6 @@ fake key to the attacker's server; the right run blocks it and still answers. Ea
 minute on a laptop CPU. `make demo-check` starts everything, verifies it, and stops.
 
 <sub>No `make` on Windows? Every target is a script in `scripts/`.</sub>
-
-## 🔌 Use it with your own MCP client
-
-PromptShield starts your tool servers itself and exposes them through one gateway at
-`http://127.0.0.1:8000/mcp/`.
-
-**1. List your tool servers** in `.env` as JSON:
-
-```
-PROMPTSHIELD_GATEWAY_UPSTREAMS=[{"name": "files", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/you/Documents"]}]
-```
-
-**2. Mark read-only tools as reads.** Tools not in the policy count as egress, so every call waits for
-your approval. Copy `promptshield/policy/default.yaml`, add your tools, and set
-`PROMPTSHIELD_POLICY_PATH` to your copy:
-
-```yaml
-tools:
-  files.read_text_file: { class: read, sensitive_output: true }   # results count as private data
-  files.list_directory: { class: read }
-```
-
-**3. Start the API** (`uv run python -m promptshield.api.server`), then **connect your client.** HTTP
-clients use `http://127.0.0.1:8000/mcp/` and can send the user's task in an `X-PromptShield-Task`
-header. Stdio-only clients such as Claude Desktop use the bridge:
-
-```json
-{
-  "mcpServers": {
-    "promptshield": {
-      "command": "uv",
-      "args": ["--directory", "/path/to/PromptShield", "run", "python", "-m", "promptshield.gateway.stdio_bridge"]
-    }
-  }
-}
-```
-
-To give the judge a fixed task, add `"--task", "Summarize my inbox"` to `args`. Start the API before the
-client: the bridge connects to it at startup.
-
-Remove the tool servers from the client's own config, or it can go around the gateway. Approvals appear
-on the dashboard's **Approvals** page. PromptShield never edits your client's configuration.
 
 ## 📈 Benchmarks
 
