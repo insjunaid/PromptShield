@@ -1801,9 +1801,9 @@ wheels = [
 ]
 
 [[package]]
-name = "promptshield"
+name = "promptshield-mcp"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "anyio" },
     { name = "beautifulsoup4" },
@@ -1827,6 +1827,13 @@ dependencies = [
     { name = "structlog" },
     { name = "tokenizers" },
     { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.optional-dependencies]
+prompt-guard = [
+    { name = "optimum-onnx" },
+    { name = "torch" },
+    { name = "transformers" },
 ]
 
 [package.dev-dependencies]
@@ -1867,6 +1874,7 @@ requires-dist = [
     { name = "langgraph", specifier = ">=1.2.20" },
     { name = "lxml", specifier = ">=6.1.3" },
     { name = "mcp", specifier = ">=1.30,<2" },
+    { name = "optimum-onnx", marker = "extra == 'prompt-guard'", specifier = ">=0.1.0" },
     { name = "pillow", specifier = ">=13.0.0" },
     { name = "psutil", specifier = ">=7.2.2" },
     { name = "pydantic", specifier = ">=2.14.2" },
@@ -1877,8 +1885,11 @@ requires-dist = [
     { name = "sqlmodel", specifier = ">=0.0.48" },
     { name = "structlog", specifier = ">=26.1.0" },
     { name = "tokenizers", specifier = ">=0.22.2" },
+    { name = "torch", marker = "extra == 'prompt-guard'", specifier = ">=2.15.0" },
+    { name = "transformers", marker = "extra == 'prompt-guard'", specifier = ">=4.57.6" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.54.0" },
 ]
+provides-extras = ["prompt-guard"]
 
 [package.metadata.requires-dev]
 dev = [

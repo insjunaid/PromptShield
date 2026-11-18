@@ -41,3 +41,8 @@ dashboard/playwright-report/
 /START_HERE.md
 /.claude/
 /docs/*.md
+
+# Built dashboard for the package (scripts/build_dashboard.py), and the CLI's server list.
+/promptshield/web/
+/servers.json
+/dist/

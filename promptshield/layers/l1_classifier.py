@@ -238,13 +238,20 @@ class ClassifierLayer:
                 scores[index] = score
         return scores
 
+    def _threshold(self, model_id: str) -> float:
+        """Each model's scores have their own scale; the calibrated value fits Prompt Guard 2."""
+        settings = self._settings
+        if model_id == settings.fallback_classifier_model:
+            return settings.fallback_classifier_threshold
+        return settings.classifier_threshold
+
     def _findings(self, segments: Sequence[Segment], best: Best) -> list[Finding]:
         """The strongest hit per origin, so the policy can weigh hidden hits up without many
         weak visible windows adding up through noisy-OR. The rule names the model that scored."""
-        threshold = self._settings.classifier_threshold
         strongest: dict[SegmentOrigin, tuple[float, str, str]] = {}
         for index, (score, text, model_id) in best.items():
             origin = segments[index].origin
+            threshold = self._threshold(model_id)
             if score >= threshold and score > strongest.get(origin, (-1.0, "", ""))[0]:
                 strongest[origin] = (score, text, model_id)
         return [
@@ -271,7 +278,7 @@ def _load(settings: Settings) -> Classifier:
                 "classifier_loading", model=model_id, precision=settings.classifier_precision
             )
             return OnnxClassifier(folder, settings.classifier_threads, settings.chunk_max_tokens)
-    raise LayerSkipped("no exported classifier: run scripts/export_classifiers.py")
+    raise LayerSkipped("no classifier installed: run `promptshield setup`")
 
 
 def _load_second(settings: Settings) -> Classifier:

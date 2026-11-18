@@ -18,6 +18,9 @@ if TYPE_CHECKING:
     from lab.jobs import LabJob, LabJobs
 
 router = APIRouter()
+LAB_NOT_INSTALLED = (
+    "The Red-Team Lab isn't part of the installed package. Run it from a clone of the repository."
+)
 
 
 class RunRequest(Schema):
@@ -47,7 +50,11 @@ def jobs(request: Request) -> Any:
     """Built on first use, so the lab loads only when the lab is used."""
     existing = getattr(request.app.state, "lab_jobs", None)
     if existing is None:
-        from lab.jobs import LabJobs
+        try:
+            from lab.jobs import LabJobs
+        except ImportError as error:
+            # The installed package ships the shield, not the lab: that runs from a clone.
+            raise HTTPException(status_code=404, detail=LAB_NOT_INSTALLED) from error
         from promptshield.sdk import LocalShield
 
         state: AppState = request.app.state.shield

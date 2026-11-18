@@ -30,6 +30,7 @@ from promptshield.api.routes import policy as policy_routes
 from promptshield.api.routes import registry as registry_routes
 from promptshield.api.routes import sessions as session_routes
 from promptshield.api.state import AppState
+from promptshield.api.web import dashboard_built, mount_dashboard
 from promptshield.approvals import ApprovalQueue
 from promptshield.config import Settings, get_settings
 from promptshield.events import EventBus
@@ -184,7 +185,9 @@ def create_app(settings: Settings | None = None, registry: LayerRegistry | None 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=stream.allowed_origins(active_settings.dashboard_port),
+        allow_origins=stream.allowed_origins(
+            active_settings.dashboard_port, active_settings.api_port
+        ),
         allow_methods=["GET", "POST", "PUT"],
         allow_headers=["Content-Type", TOKEN_HEADER],
     )
@@ -205,6 +208,8 @@ def create_app(settings: Settings | None = None, registry: LayerRegistry | None 
     app.include_router(bench.router)
     app.include_router(stream.router)
     app.mount("/mcp", mounted)
+    if dashboard_built():
+        mount_dashboard(app)
     return app
 
 

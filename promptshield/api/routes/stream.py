@@ -14,8 +14,10 @@ router = APIRouter()
 Direction = Callable[[WebSocket, Subscription], Awaitable[None]]
 
 
-def allowed_origins(dashboard_port: int) -> list[str]:
-    return [f"http://localhost:{dashboard_port}", f"http://127.0.0.1:{dashboard_port}"]
+def allowed_origins(*ports: int) -> list[str]:
+    """The dashboard's origins: the dev server's port, and the API's own when the installed
+    package serves the dashboard itself."""
+    return [f"http://{host}:{port}" for port in ports for host in ("localhost", "127.0.0.1")]
 
 
 async def _send_events(websocket: WebSocket, subscription: Subscription) -> None:
@@ -69,7 +71,9 @@ async def stream(websocket: WebSocket, session_id: str | None = None) -> None:
     origin = websocket.headers.get("origin")
     # CORS doesn't apply to WebSockets, so any website could connect without this check.
     # Non-browser clients send no Origin.
-    if origin is not None and origin not in allowed_origins(state.settings.dashboard_port):
+    if origin is not None and origin not in allowed_origins(
+        state.settings.dashboard_port, state.settings.api_port
+    ):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 

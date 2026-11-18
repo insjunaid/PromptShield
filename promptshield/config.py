@@ -4,6 +4,8 @@ Decision thresholds live in the policy YAML, not here. The checks below enforce 
 rules at startup, so a bad override stops the process instead of exposing the lab.
 """
 
+import json
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Self
@@ -14,7 +16,27 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from promptshield.models import LayerName
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+PACKAGE_DIR = Path(__file__).resolve().parent
+REPO_ROOT = PACKAGE_DIR.parent
+HOME_ENV = "PROMPTSHIELD_HOME"
+SERVERS_FILE = "servers.json"
+
+
+def is_source_checkout(root: Path = REPO_ROOT) -> bool:
+    """A clone of the repo, as opposed to an installed package in site-packages."""
+    return (root / "pyproject.toml").is_file() and (root / "lab").is_dir()
+
+
+def default_home() -> Path:
+    """Where data, models, `.env` and the server list live. A clone keeps using the repo folder,
+    so nothing changes for development; an installed copy uses ~/.promptshield."""
+    override = os.environ.get(HOME_ENV)
+    if override:
+        return Path(override).expanduser().resolve()
+    return REPO_ROOT if is_source_checkout() else Path.home() / ".promptshield"
+
+
+HOME = default_home()
 
 
 class UpstreamServer(BaseModel):
@@ -35,7 +57,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="PROMPTSHIELD_",
-        env_file=REPO_ROOT / ".env",
+        env_file=HOME / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -83,6 +105,9 @@ class Settings(BaseSettings):
     # highest recall with FPR <= 5% (eval/reports/scan_20261114_1552.md, D065). Policy thresholds
     # still decide: a lone weak hit adds risk but stays under the sanitize line.
     classifier_threshold: float = Field(default=0.10, ge=0, le=1)
+    # The fallback (ProtectAI) when it is the classifier that ran. 0.10 was calibrated for Prompt
+    # Guard 2 only; 0.50 is where the scan report measured the fallback (not calibrated).
+    fallback_classifier_threshold: float = Field(default=0.50, ge=0, le=1)
     # The fallback model as a second opinion on Latin-script text (Junaid, 2026-11-11, option B).
     # Off until P7 measures its false positives on public benign data. Costs about 0.9 GB.
     classifier_second_opinion: bool = False
@@ -113,9 +138,11 @@ class Settings(BaseSettings):
     ocr_max_pixels: int = Field(default=25_000_000, ge=1)
     ocr_max_images: int = Field(default=8, ge=1)
 
-    # Paths. Relative values resolve from the repo root, so any working directory behaves the same.
+    # Paths. Relative values resolve from the home folder (the repo in a clone, ~/.promptshield when
+    # installed), so any working directory behaves the same. The default policy ships inside the
+    # package.
     db_path: Path = Path("data/promptshield.db")
-    policy_path: Path = Path("promptshield/policy/default.yaml")
+    policy_path: Path = PACKAGE_DIR / "policy" / "default.yaml"
     lab_runs_dir: Path = Path("lab/runs")
     scenarios_dir: Path = Path("lab/scenarios")
     attack_site_dir: Path = Path("lab/attack_site/public")
@@ -139,7 +166,9 @@ class Settings(BaseSettings):
     admin_token_path: Path = Path("data/admin_token")
 
     # Gateway. Upstream names are the `server` part of policy keys, such as `files.read_file`.
+    # Set here (JSON), or kept by `promptshield servers add` in servers.json in the home folder.
     gateway_upstreams: list[UpstreamServer] = Field(default_factory=list)
+    servers_file: Path = Path(SERVERS_FILE)
     gateway_call_timeout_seconds: float = Field(default=120.0, gt=0)
 
     # Events.
@@ -179,10 +208,19 @@ class Settings(BaseSettings):
         "reports_dir",
         "models_dir",
         "admin_token_path",
+        "servers_file",
     )
     @classmethod
-    def resolve_from_repo_root(cls, value: Path) -> Path:
-        return value if value.is_absolute() else REPO_ROOT / value
+    def resolve_from_home(cls, value: Path) -> Path:
+        return value if value.is_absolute() else HOME / value
+
+    @model_validator(mode="after")
+    def load_servers_file(self) -> Self:
+        """Servers set in the environment win; otherwise the list `promptshield servers` keeps."""
+        if not self.gateway_upstreams and self.servers_file.is_file():
+            entries = json.loads(self.servers_file.read_text(encoding="utf-8"))
+            self.gateway_upstreams = [UpstreamServer.model_validate(entry) for entry in entries]
+        return self
 
     @model_validator(mode="after")
     def require_unique_ports(self) -> Self:

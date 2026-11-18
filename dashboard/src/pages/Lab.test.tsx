@@ -88,6 +88,19 @@ describe("LabPage", () => {
     expect((screen.getByRole("button", { name: "Run comparison" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("says so plainly when the installed package has no lab", async () => {
+    const message = "The Red-Team Lab isn't part of the installed package. Run it from a clone of the repository.";
+    serve((url) =>
+      url === "/v1/lab/scenarios"
+        ? Response.json({ error: { code: "not_found", message, details: {} } }, { status: 404 })
+        : undefined,
+    );
+    renderPage();
+    expect(await screen.findByText("The Red-Team Lab isn't installed here.")).toBeDefined();
+    expect(screen.getByText(message, { exact: false })).toBeDefined();
+    expect(screen.queryByText(/Is the API running/)).toBeNull();
+  });
+
   it("runs the pair and shows each side's steps, sink and verdict", async () => {
     const fetchMock = serve(() => undefined);
     useLiveStore.getState().addEvents([

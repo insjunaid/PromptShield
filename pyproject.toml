@@ -1,7 +1,19 @@
 [project]
-name = "promptshield"
+name = "promptshield-mcp"
 version = "0.1.0"
-description = "Real-time security firewall for AI agents"
+description = "A real-time firewall for AI agents: an MCP gateway that stops prompt injection and data theft"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Junaid" }]
+keywords = ["mcp", "prompt-injection", "ai-security", "llm", "agents", "firewall"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+]
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "anyio>=4.16.0",
@@ -27,6 +39,36 @@ dependencies = [
     "tokenizers>=0.22.2",
     "uvicorn[standard]>=0.54.0",
 ]
+
+[project.optional-dependencies]
+# `promptshield setup --prompt-guard`: exports Meta's gated Prompt Guard 2 to ONNX, once.
+prompt-guard = [
+    "optimum-onnx>=0.1.0",
+    "torch>=2.15.0",
+    "transformers>=4.57.6",
+]
+
+[project.scripts]
+promptshield = "promptshield.cli:main"
+promptshield-mcp = "promptshield.cli:main"   # so `uvx promptshield-mcp ...` works
+
+[project.urls]
+Homepage = "https://github.com/insjunaid/PromptShield"
+Repository = "https://github.com/insjunaid/PromptShield"
+Issues = "https://github.com/insjunaid/PromptShield/issues"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["promptshield"]
+# The built dashboard is git-ignored (scripts/build_dashboard.py makes it), so name it explicitly.
+artifacts = ["promptshield/web/**"]
+
+[tool.hatch.build.targets.sdist]
+include = ["promptshield", "README.md", "LICENSE", "NOTICE"]
+artifacts = ["promptshield/web/**"]
 
 [dependency-groups]
 dev = [

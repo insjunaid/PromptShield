@@ -27,12 +27,28 @@ export class ApiError extends Error {
 /** Requests go to /v1 on the same origin; Vite proxies them to the API in development. */
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(path, { headers: { Accept: "application/json" } });
-  if (!response.ok) throw new ApiError(response.status, `${path} returned ${response.status}`);
+  if (!response.ok) throw await errorFrom(response, path);
   return (await response.json()) as T;
 }
 
 interface ErrorBody {
   error?: { message?: unknown; details?: unknown };
+}
+
+/** The API's own message when it sent one, so pages can say what actually went wrong. */
+async function errorFrom(response: Response, path: string): Promise<ApiError> {
+  let message = `${path} returned ${response.status}`;
+  let details: Record<string, unknown> = {};
+  try {
+    const parsed = (await response.json()) as ErrorBody;
+    if (typeof parsed.error?.message === "string") message = parsed.error.message;
+    if (parsed.error?.details && typeof parsed.error.details === "object") {
+      details = parsed.error.details as Record<string, unknown>;
+    }
+  } catch {
+    // not JSON: keep the status line
+  }
+  return new ApiError(response.status, message, details);
 }
 
 /**
@@ -45,20 +61,7 @@ async function sendJson<T>(method: "POST" | "PUT", path: string, body?: unknown)
     headers: { Accept: "application/json", "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (!response.ok) {
-    let message = `${path} returned ${response.status}`;
-    let details: Record<string, unknown> = {};
-    try {
-      const parsed = (await response.json()) as ErrorBody;
-      if (typeof parsed.error?.message === "string") message = parsed.error.message;
-      if (parsed.error?.details && typeof parsed.error.details === "object") {
-        details = parsed.error.details as Record<string, unknown>;
-      }
-    } catch {
-      // not JSON: keep the status line
-    }
-    throw new ApiError(response.status, message, details);
-  }
+  if (!response.ok) throw await errorFrom(response, path);
   return (await response.json()) as T;
 }
 

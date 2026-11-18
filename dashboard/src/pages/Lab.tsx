@@ -80,6 +80,18 @@ export function LabPage() {
   const onItems = useMemo(() => (pair ? timelineItems(events, pair.on.session_id) : []), [events, pair]);
   const choice = scenarios.data?.find((scenario) => scenario.id === selected) ?? null;
 
+  if (scenarios.error instanceof ApiError && scenarios.error.status === 404) {
+    // The installed package ships the shield without the lab (the API says so).
+    return (
+      <EmptyState icon={FlaskConical} title="The Red-Team Lab isn't installed here.">
+        {scenarios.error.message}{" "}
+        <a className="text-accent underline-offset-4 hover:underline" href="https://github.com/insjunaid/PromptShield">
+          Get the repository
+        </a>
+      </EmptyState>
+    );
+  }
+
   if (scenarios.isError) {
     return (
       <EmptyState icon={FlaskConical} title="Couldn't load the scenarios.">
