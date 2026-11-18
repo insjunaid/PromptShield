@@ -1,25 +1,12 @@
 {
   "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "uvx",
-            "args": ["promptshield-mcp", "hook"],
-            "timeout": 30
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
       {
         "matcher": "Bash|PowerShell|WebFetch|WebSearch|Read|Write|Edit|NotebookEdit|Glob|Grep",
         "hooks": [
           {
-            "type": "command",
-            "command": "uvx",
-            "args": ["promptshield-mcp", "hook"],
+            "type": "http",
+            "url": "http://127.0.0.1:8000/v1/hooks/claude",
             "timeout": 15
           }
         ]
@@ -30,9 +17,8 @@
         "matcher": "WebFetch|WebSearch|Read|Grep|Bash|PowerShell",
         "hooks": [
           {
-            "type": "command",
-            "command": "uvx",
-            "args": ["promptshield-mcp", "hook"],
+            "type": "http",
+            "url": "http://127.0.0.1:8000/v1/hooks/claude",
             "timeout": 60
           }
         ]

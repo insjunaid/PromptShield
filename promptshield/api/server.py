@@ -27,6 +27,7 @@ from promptshield.api.routes import (
     stats,
     stream,
 )
+from promptshield.api.routes import hooks as hook_routes
 from promptshield.api.routes import policy as policy_routes
 from promptshield.api.routes import registry as registry_routes
 from promptshield.api.routes import sessions as session_routes
@@ -202,6 +203,7 @@ def create_app(settings: Settings | None = None, registry: LayerRegistry | None 
     app.include_router(health.router)
     app.include_router(scan.router)
     app.include_router(guard.router)
+    app.include_router(hook_routes.router)
     app.include_router(approvals.router)
     app.include_router(registry_routes.router)
     app.include_router(lab.router)

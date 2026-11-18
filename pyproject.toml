@@ -1,6 +1,6 @@
 [project]
 name = "promptshield-mcp"
-version = "0.1.2"
+version = "0.1.3"
 description = "A real-time firewall for AI agents: an MCP gateway that stops prompt injection and data theft"
 dynamic = ["readme"]   # README.md, with links made absolute for PyPI (see fancy-pypi-readme below)
 license = "MIT"

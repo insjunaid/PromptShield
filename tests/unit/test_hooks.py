@@ -186,17 +186,23 @@ def test_the_plugin_bundles_the_bridge() -> None:
     assert server == {"command": "uvx", "args": [cli.PACKAGE, "bridge"]}
 
 
-def test_every_hook_runs_the_hook_command_and_covers_the_scanned_tools() -> None:
+def test_every_hook_posts_to_the_shield_and_covers_the_scanned_tools() -> None:
+    """HTTP hooks launch no process: no console window per tool call on Windows, no start-up cost.
+    The shield is started by the plugin's MCP server, so there's no SessionStart command hook."""
+    from promptshield.config import Settings
+
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
     config = load(PLUGIN / "hooks" / "hooks.json")["hooks"]  # the file needs the wrapper
-    assert set(config) == {"SessionStart", "PreToolUse", "PostToolUse"}
+    assert set(config) == {"PreToolUse", "PostToolUse"}
     for groups in config.values():
         for group in groups:
             for handler in group["hooks"]:
-                assert handler["command"] == "uvx" and handler["args"] == [cli.PACKAGE, "hook"]
+                assert handler["type"] == "http"
+                assert handler["url"] == f"http://127.0.0.1:{settings.api_port}/v1/hooks/claude"
+                assert "onFailure" not in handler  # an absent shield must not block Claude
     post_matcher = set(config["PostToolUse"][0]["matcher"].split("|"))
     assert post_matcher == hooks.SCANNED_TOOLS
-    assert config["PostToolUse"][0]["hooks"][0]["timeout"] > cli.HOOK_TIMEOUTS["PostToolUse"]
-    assert config["PreToolUse"][0]["hooks"][0]["timeout"] > cli.HOOK_TIMEOUTS["PreToolUse"]
+    assert config["PostToolUse"][0]["hooks"][0]["timeout"] >= 60  # room for the judge
 
 
 def test_the_skill_has_its_front_matter() -> None:
