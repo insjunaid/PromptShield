@@ -350,6 +350,53 @@ def cmd_config(args: argparse.Namespace) -> None:
     print(client_snippet(args.client))
 
 
+HOOK_TIMEOUTS = {"PreToolUse": 10.0, "PostToolUse": 55.0}  # under the plugin's hook timeouts
+
+
+def read_stdin() -> str:
+    """UTF-8 whatever the platform: on Windows a text-mode stdin uses the ANSI code page, which
+    would garble non-English tool results. A byte-order mark (PowerShell adds one) is dropped."""
+    buffer = getattr(sys.stdin, "buffer", None)
+    if buffer is None:  # a replaced stdin, such as in tests
+        return sys.stdin.read().lstrip("﻿")
+    data: bytes = buffer.read()
+    return data.decode("utf-8-sig")
+
+
+def cmd_hook(_: argparse.Namespace) -> None:
+    """Claude Code runs this around its built-in tools (hooks.py). It reads the event from stdin,
+    prints a JSON answer or nothing, and always exits 0: a problem here must not block Claude."""
+    from promptshield import hooks
+
+    try:
+        event = json.loads(read_stdin() or "{}")
+        settings = get_settings()
+        if event.get("hook_event_name") == "SessionStart":
+            if not is_running(settings):
+                start_in_background(settings)
+            return
+        timeout = HOOK_TIMEOUTS.get(str(event.get("hook_event_name")), 10.0)
+
+        def post(path: str, body: dict[str, object]) -> dict[str, object] | None:
+            try:
+                response = httpx.post(
+                    f"{api_url(settings)}{path}", json=body, timeout=timeout, trust_env=False
+                )
+            except httpx.HTTPError:
+                return None  # shield not running: no opinion
+            if response.status_code != 200:
+                err(f"PromptShield hook: {path} returned {response.status_code}")
+                return None
+            result: dict[str, object] = response.json()
+            return result
+
+        answer = hooks.handle(event, post)
+        if answer is not None:
+            print(json.dumps(answer))
+    except Exception as error:  # noqa: BLE001 - never break Claude Code over the shield
+        err(f"PromptShield hook failed: {type(error).__name__}")
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(prog="promptshield", description=__doc__.splitlines()[0])
     sub = root.add_subparsers(dest="command", required=True)
@@ -386,6 +433,9 @@ def parser() -> argparse.ArgumentParser:
     config = sub.add_parser("config", help="print the MCP config entry for an app")
     config.add_argument("client", choices=CLIENTS)
     config.set_defaults(run=cmd_config)
+
+    hook = sub.add_parser("hook", help="Claude Code hook (reads the event on stdin)")
+    hook.set_defaults(run=cmd_hook)
     return root
 
 

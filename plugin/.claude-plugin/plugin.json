@@ -1,0 +1,20 @@
+{
+  "name": "promptshield",
+  "displayName": "PromptShield",
+  "version": "0.1.0",
+  "description": "A real-time firewall for AI agents. Scans what Claude Code's tools return for prompt injection and checks risky calls before they run, with a live dashboard on 127.0.0.1:8000.",
+  "author": {
+    "name": "Junaid",
+    "url": "https://github.com/insjunaid"
+  },
+  "homepage": "https://github.com/insjunaid/PromptShield",
+  "repository": "https://github.com/insjunaid/PromptShield",
+  "license": "MIT",
+  "keywords": ["security", "prompt-injection", "mcp", "firewall"],
+  "mcpServers": {
+    "promptshield": {
+      "command": "uvx",
+      "args": ["promptshield-mcp", "bridge"]
+    }
+  }
+}

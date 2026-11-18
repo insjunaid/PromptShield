@@ -43,6 +43,18 @@ tools:                       # keyed by server.tool, so a shadowing tool can't i
   # The lab's weather tool, trusted as a user who installed it would. Its tricks (A10, A11) are
   # the registry guard's job, not the policy's.
   evil.get_weather:    { class: read }
+  # Claude Code's built-in tools, checked by the plugin's hooks (server "claude"). Shell commands
+  # are writes so every command isn't held for approval; Claude Code's own prompts gate them.
+  claude.Read:         { class: read,  sensitive_output: true }
+  claude.Glob:         { class: read }
+  claude.Grep:         { class: read }
+  claude.WebSearch:    { class: read }
+  claude.WebFetch:     { class: read, egress_if: has_query, arg_destination: url }
+  claude.Write:        { class: write }
+  claude.Edit:         { class: write }
+  claude.NotebookEdit: { class: write }
+  claude.Bash:         { class: write }
+  claude.PowerShell:   { class: write }
 
 egress:
   allow_hosts: ["localhost:8081", "company.example"]   # host:port; a bare "localhost" is invalid

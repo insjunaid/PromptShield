@@ -1,0 +1,17 @@
+{
+  "name": "promptshield",
+  "owner": {
+    "name": "Junaid",
+    "url": "https://github.com/insjunaid"
+  },
+  "description": "PromptShield: a real-time firewall for AI agents. Stops prompt injection and data theft at the MCP layer.",
+  "plugins": [
+    {
+      "name": "promptshield",
+      "source": "./plugin",
+      "description": "Puts Claude Code's tools behind PromptShield: MCP tools through its gateway, built-in tools through hooks.",
+      "category": "security",
+      "tags": ["security", "prompt-injection", "mcp"]
+    }
+  ]
+}

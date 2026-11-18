@@ -9,7 +9,15 @@ from pydantic import Field
 
 from promptshield.api.state import AppState, get_state
 from promptshield.layers.base import ScanContext
-from promptshield.models import ContentItem, Direction, Event, Schema, SessionInfo, Verdict
+from promptshield.models import (
+    ContentItem,
+    Direction,
+    Event,
+    Schema,
+    SessionInfo,
+    ToolCall,
+    Verdict,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -20,6 +28,17 @@ class ScanRequest(Schema):
     items: list[ContentItem] = Field(min_length=1)
     session_id: str | None = None
     user_task: str | None = None
+    # "server.tool" that produced the content, when known (the Claude Code hooks send it), so the
+    # policy can mark private results, such as a file read, for taint tracking.
+    tool: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$")
+
+
+def _sensitive(state: AppState, request: ScanRequest, session_id: str) -> bool:
+    if request.tool is None:
+        return False
+    server, tool = request.tool.split(".", 1)
+    call = ToolCall(session_id=session_id, server=server, tool=tool, args={})
+    return state.engine.has_sensitive_output(call)
 
 
 async def _load_session(state: AppState, request: ScanRequest) -> SessionInfo:
@@ -49,13 +68,12 @@ async def scan(request: ScanRequest, state: Annotated[AppState, Depends(get_stat
     session = await _load_session(state, request)
     context = ScanContext(session=session, items=request.items)
     verdict = await state.shield.inspect(context)
-    # A direct scan doesn't say which tool produced the content, so it can't be marked sensitive.
-    # The gateway knows the tool and records sensitivity (P5.1).
+    # Sensitive only when the caller names the tool; the gateway records its own calls (P5.1).
     state.sessions.get(session.id).record_result(
         ",".join(item.source for item in request.items),
         [item.data for item in request.items if item.kind != "image"],
         verdict.findings,
-        sensitive=False,
+        sensitive=_sensitive(state, request, session.id),
     )
     published = await state.bus.publish(
         Event(
