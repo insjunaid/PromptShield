@@ -254,6 +254,14 @@ Everything stays on your machine, in `~/.promptshield`.
 /plugin install promptshield --marketplace insjunaid/PromptShield
 ```
 
+In an editor extension where `/plugin` isn't available (VS Code, Antigravity), install it from a terminal
+instead; it goes into your user settings, which the extension loads too:
+
+```
+npx -y @anthropic-ai/claude-code plugin marketplace add insjunaid/PromptShield
+npx -y @anthropic-ai/claude-code plugin install promptshield@promptshield
+```
+
 The plugin puts your MCP tools behind the gateway **and** checks Claude Code's built-in tools (WebFetch,
 Read, Bash, …) with hooks: risky calls are denied or need your OK, and an injected result is flagged to
 Claude before it can act on it.
