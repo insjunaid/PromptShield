@@ -1,7 +1,7 @@
 {
   "name": "promptshield",
   "displayName": "PromptShield",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A real-time firewall for AI agents. Scans what Claude Code's tools return for prompt injection and checks risky calls before they run, with a live dashboard on 127.0.0.1:8000.",
   "author": {
     "name": "Junaid",

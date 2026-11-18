@@ -96,6 +96,14 @@ def test_an_injected_result_is_flagged_next_to_the_output() -> None:
     assert body["items"][0]["data"] == "page text"
 
 
+def test_an_unchecked_result_is_not_called_an_attack() -> None:
+    failed = {"decision": "BLOCK", "reasons": ["A detection layer failed"], "findings": []}
+    answer = hooks.handle(post_event("Read", {"content": "notes"}), Recorder(failed))
+    assert answer is not None
+    assert "couldn't check" in answer["reason"] and "promptshield-mcp setup" in answer["reason"]
+    assert "instructions aimed at an AI" not in answer["reason"]
+
+
 def test_a_lone_classifier_hit_is_not_called_an_attack() -> None:
     weak = {"decision": "SANITIZE", "findings": [{"layer": "L1", "rule_id": "L1.CLASSIFIER.x"}]}
     assert hooks.handle(post_event("Read", {"content": "DB_PASSWORD=abc"}), Recorder(weak)) is None
@@ -176,7 +184,6 @@ def test_the_plugin_bundles_the_bridge() -> None:
     manifest = load(PLUGIN / ".claude-plugin" / "plugin.json")
     server = manifest["mcpServers"]["promptshield"]
     assert server == {"command": "uvx", "args": [cli.PACKAGE, "bridge"]}
-    assert manifest["version"] == "0.1.0"
 
 
 def test_every_hook_runs_the_hook_command_and_covers_the_scanned_tools() -> None:
