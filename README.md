@@ -320,6 +320,16 @@ Approvals appear on the dashboard's **Approvals** page; no answer in 120 s means
 `uvx promptshield-mcp doctor` shows what's installed and running. PromptShield never edits your
 client's configuration: it prints the entry, and you paste it.
 
+### Pause or turn it off
+
+| You want to… | Do this |
+| --- | --- |
+| **Keep it running but never block anything** | On the dashboard, open **Policies** and switch the mode to **Monitor**. Every verdict is still recorded, as what it *would* have done. Switch back to **Enforce** to protect again |
+| Pause it in Claude Code | `/plugin disable promptshield@promptshield` (turn it back on with `/plugin enable promptshield@promptshield`, or use the **Installed** tab in `/plugin`) |
+| Remove it from Claude Code | `/plugin uninstall promptshield@promptshield` |
+| Remove it from another app | Delete the `promptshield` entry from that app's MCP config |
+| Stop the shield | Close the app that started it, or press **Ctrl+C** where `uvx promptshield-mcp start` runs |
+
 <details>
 <summary>Use Prompt Guard 2, the classifier the results above were measured with</summary>
 
